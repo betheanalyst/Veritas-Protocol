@@ -14,6 +14,7 @@ import { EmptyState } from "@/components/states/EmptyState";
 import { describeError } from "@/adapters/errors";
 import { useKnownModules } from "@/queries/useProtocolReads";
 import { KNOWN_MODULE_LABELS } from "@/config/known-modules";
+import { useWallet } from "@/wallet/WalletProvider";
 import type { Module } from "@/domain/types";
 
 function ModuleCard({ module }: { readonly module: Module }) {
@@ -40,6 +41,7 @@ function ModuleCard({ module }: { readonly module: Module }) {
 }
 
 export default function ModulesPage() {
+  const wallet = useWallet();
   const query = useKnownModules();
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
@@ -66,6 +68,16 @@ export default function ModulesPage() {
         eyebrow="Modules"
         title="Verification modules"
         description="Each module is a registered evaluation policy: what it checks, which thresholds apply, and how disputes are handled."
+        actions={
+          wallet.isConnected ? (
+            <Link
+              href="/my/modules"
+              className="inline-flex h-10 items-center rounded-md bg-accent px-4 text-sm font-medium text-[#171307] transition-colors hover:bg-accent-strong"
+            >
+              Register a module
+            </Link>
+          ) : null
+        }
       />
       <Container className="py-12">
         <div className="flex flex-wrap items-end gap-4">

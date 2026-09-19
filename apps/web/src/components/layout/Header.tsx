@@ -5,18 +5,25 @@ import { usePathname } from "next/navigation";
 
 import { VeritasLogo } from "@/components/brand/VeritasLogo";
 import { WalletConnect } from "@/components/wallet/WalletConnect";
+import { useWallet } from "@/wallet/WalletProvider";
 import { cn } from "@/lib/cn";
 
-const NAV_ITEMS = [
+const PUBLIC_NAV = [
   { href: "/verify", label: "Verify" },
   { href: "/modules", label: "Modules" },
   { href: "/activity", label: "Activity" },
   { href: "/protocol", label: "Protocol" },
 ] as const;
 
+const MY_NAV = [
+  { href: "/my/verifications", label: "My Verifications" },
+  { href: "/my/modules", label: "My Modules" },
+] as const;
+
 /** Application header — visually quiet, wallet on the right (per spec). */
 export function Header() {
   const pathname = usePathname();
+  const { isConnected } = useWallet();
 
   return (
     <header className="sticky top-0 z-40 border-b border-hairline bg-bg-base/90 backdrop-blur-sm">
@@ -26,7 +33,7 @@ export function Header() {
             <VeritasLogo />
           </Link>
           <nav aria-label="Primary" className="hidden items-center gap-1 md:flex">
-            {NAV_ITEMS.map((item) => {
+            {(isConnected ? [...PUBLIC_NAV, ...MY_NAV] : PUBLIC_NAV).map((item) => {
               const active = pathname === item.href || pathname.startsWith(item.href + "/");
               return (
                 <Link
