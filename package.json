@@ -1,0 +1,18 @@
+{
+  "name": "veritas-protocol",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Veritas Protocol — decentralized verification on GenLayer.",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "npm --prefix apps/web run dev",
+    "build": "npm --prefix apps/web run build",
+    "start": "npm --prefix apps/web run start",
+    "lint": "npm --prefix apps/web run lint",
+    "type-check": "npm --prefix apps/web run type-check",
+    "test": "npm --prefix apps/web run test",
+    "smoke": "npm --prefix apps/web run smoke"
+  }
+}

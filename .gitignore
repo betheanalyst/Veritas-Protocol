@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+
+# Next.js
+.next/
+out/
+next-env.d.ts
+
+# Testing
+coverage/
+
+# Environment (real local values are never committed; .env.example is tracked)
+.env
+.env*.local
+
+# Build artifacts
+*.tsbuildinfo
+
+# Vercel
+.vercel
+
+# OS
+.DS_Store
