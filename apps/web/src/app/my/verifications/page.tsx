@@ -80,7 +80,11 @@ export default function MyVerificationsPage() {
         ) : query.isError ? (
           <ErrorState
             title="We could not load your verifications"
-            message={describeError(query.error).whatHappened}
+            message={
+              describeError(query.error).whatHappened +
+              " " +
+              (query.error instanceof Error ? query.error.message : String(query.error))
+            }
             code={describeError(query.error).code}
             onRetry={() => query.refetch()}
           />

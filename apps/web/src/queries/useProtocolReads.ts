@@ -6,6 +6,7 @@ import { coreClient } from "@/adapters/core-client";
 import { DEFAULT_STATE_STATUS } from "@/adapters/genlayer-client";
 import { registryClient } from "@/adapters/registry-client";
 import { KNOWN_MODULE_IDS } from "@/config/known-modules";
+import type { Module } from "@/domain/types";
 
 /**
  * Read-surface queries. One batched query for the known-module set (no N+1
@@ -15,7 +16,12 @@ import { KNOWN_MODULE_IDS } from "@/config/known-modules";
 export function useKnownModules() {
   return useQuery({
     queryKey: ["registry", "known-modules", DEFAULT_STATE_STATUS, [...KNOWN_MODULE_IDS]],
-    queryFn: () => Promise.all(KNOWN_MODULE_IDS.map((moduleId) => registryClient.getModule(moduleId))),
+    queryFn: async () => {
+      const results = await Promise.allSettled(KNOWN_MODULE_IDS.map((moduleId) => registryClient.getModule(moduleId)));
+      return results
+        .filter((r): r is PromiseFulfilledResult<Module> => r.status === "fulfilled")
+        .map((r) => r.value);
+    },
     staleTime: 60_000,
   });
 }

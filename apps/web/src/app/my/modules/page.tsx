@@ -77,12 +77,20 @@ export default function MyModulesPage() {
                   </div>
                   <p className="mt-0.5 line-clamp-1 text-xs text-fg-muted">{mod.description}</p>
                 </div>
-                <Link
-                  href={`/my/modules/${encodeURIComponent(mod.moduleId)}/edit`}
-                  className={buttonStyles({ variant: "secondary", size: "sm" })}
-                >
-                  Edit
-                </Link>
+                <div className="flex gap-2">
+                  <Link
+                    href={`/verify?module=${encodeURIComponent(mod.moduleId)}`}
+                    className={buttonStyles({ variant: "primary", size: "sm" })}
+                  >
+                    Verify
+                  </Link>
+                  <Link
+                    href={`/my/modules/${encodeURIComponent(mod.moduleId)}/edit`}
+                    className={buttonStyles({ variant: "secondary", size: "sm" })}
+                  >
+                    Edit
+                  </Link>
+                </div>
               </li>
             ))}
           </ol>

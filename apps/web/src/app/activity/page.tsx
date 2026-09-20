@@ -72,7 +72,7 @@ export default function ActivityPage() {
 
         <div className="mt-10 grid gap-4 sm:grid-cols-2">
           <Link
-            href="/verify"
+            href="/verify/lookup"
             className="rounded-lg border border-hairline bg-bg-surface p-5 transition-colors hover:border-fg-muted/40"
           >
             <p className="text-sm font-medium text-fg">Look up a specific verification →</p>

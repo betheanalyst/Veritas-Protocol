@@ -194,7 +194,7 @@ export default function GovernancePage() {
           </section>
         ) : null}
 
-        {isAdmin && summary ? (
+        {isAdmin ? (
           <>
             <section aria-label="Propose action">
               <h2 className="mb-4 text-sm font-semibold uppercase tracking-[0.14em] text-fg-muted">Propose action</h2>
@@ -353,7 +353,7 @@ export default function GovernancePage() {
               </div>
             </section>
 
-            {summary.adminCount === 1 ? (
+            {summary && summary.adminCount === 1 ? (
               <section aria-label="Bootstrap second admin" className="rounded-lg border border-accent/30 bg-accent/5 p-5">
                 <h2 className="text-sm font-semibold uppercase tracking-[0.14em] text-accent">Bootstrap window open</h2>
                 <p className="mt-2 max-w-2xl text-sm leading-6 text-fg-secondary">

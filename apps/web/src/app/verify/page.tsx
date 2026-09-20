@@ -97,6 +97,7 @@ export default function VerifyPage() {
   const [phase, setPhase] = useState<SubmitPhase>("idle");
   const [failure, setFailure] = useState<{ message: string; code?: string; snapshotStale?: boolean } | null>(null);
   const [txHash, setTxHash] = useState<string | null>(null);
+  const [moduleSearch, setModuleSearch] = useState("");
 
   // Fresh brief module (re-fetched whenever the wizard reaches the brief step).
   const briefModuleQuery = useModule(selected?.moduleId ?? "");
@@ -215,7 +216,7 @@ export default function VerifyPage() {
         title="Run a verification"
         description="Select a module, provide the content, review the cost, and submit. Every value below is read live from the protocol."
         actions={
-          <Link href="/protocol" className={buttonStyles({ variant: "ghost", size: "sm" })}>
+          <Link href="/verify/lookup" className={buttonStyles({ variant: "ghost", size: "sm" })}>
             Inspect an existing verification
           </Link>
         }
@@ -233,8 +234,28 @@ export default function VerifyPage() {
 
         {modulesQuery.isSuccess && step === "select" ? (
           <section aria-label="Select a module">
+            <div className="mb-6 max-w-md">
+              <label htmlFor="module-search-verify" className="text-xs uppercase tracking-[0.14em] text-fg-muted">
+                Search modules
+              </label>
+              <Input
+                id="module-search-verify"
+                className="mt-2"
+                placeholder="Search by name, type, or description…"
+                value={moduleSearch}
+                onChange={(event) => setModuleSearch(event.target.value)}
+              />
+            </div>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {modulesQuery.data.map((mod) => (
+              {modulesQuery.data
+                .filter(
+                  (mod) =>
+                    !moduleSearch.trim() ||
+                    mod.moduleId.toLowerCase().includes(moduleSearch.toLowerCase()) ||
+                    mod.description.toLowerCase().includes(moduleSearch.toLowerCase()) ||
+                    mod.moduleType.toLowerCase().includes(moduleSearch.toLowerCase()),
+                )
+                .map((mod) => (
                 <button
                   key={mod.moduleId}
                   type="button"
@@ -250,7 +271,7 @@ export default function VerifyPage() {
                   </h3>
                   <p className="mt-1.5 line-clamp-2 text-sm leading-6 text-fg-secondary">{mod.description}</p>
                 </button>
-              ))}
+                ))}
             </div>
             <p className="mt-6 text-xs leading-5 text-fg-muted">
               Curated set of known modules — not a global registry (the protocol does not expose one).
