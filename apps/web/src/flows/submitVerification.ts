@@ -225,14 +225,16 @@ export async function runSubmitVerification(
       status: "FINALIZED" as never,
     })) as Record<string, unknown>;
 
-    const executionResult = String(receipt.txExecutionResult ?? receipt.txExecutionResultName ?? "");
+    const consensusData = receipt.consensus_data as Record<string, unknown> | undefined;
+    const leaderReceipt = consensusData?.leader_receipt as Array<Record<string, unknown>> | undefined;
+    const executionResult = String(leaderReceipt?.[0]?.execution_result ?? receipt.result_name ?? "");
 
-    if (executionResult === "FINISHED_WITH_ERROR") {
+    if (executionResult === "ERROR" || executionResult === "FINISHED_WITH_ERROR" || executionResult === "REVERT") {
       clearPendingTxHash();
       const code = extractErrorCode(receipt);
       return contractFailure(new Error(code ? `${code}` : "execution failed"));
     }
-    if (executionResult !== "FINISHED_WITH_RETURN") {
+    if (executionResult && executionResult !== "SUCCESS" && executionResult !== "FINISHED_WITH_RETURN" && executionResult !== "MAJORITY_AGREE") {
       return {
         kind: "timeout_unknown",
         message: `Consensus has not finalized this transaction (execution result: ${executionResult || "unknown"}). Its hash is preserved below — do not blindly resubmit; track it and retry the check.`,

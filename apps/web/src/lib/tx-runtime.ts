@@ -164,7 +164,7 @@ export async function protocolWrite(
   const receipt = await waitForFinalizedReceipt(writeClient, txHash);
   const executionResult = extractExecutionResult(receipt);
 
-  if (executionResult === "FINISHED_WITH_ERROR") {
+  if (executionResult === "ERROR" || executionResult === "FINISHED_WITH_ERROR" || executionResult === "REVERT") {
     const code = extractErrorCode(receipt);
     throw new ProtocolWriteError(
       code
@@ -175,7 +175,7 @@ export async function protocolWrite(
           },
     );
   }
-  if (executionResult !== "FINISHED_WITH_RETURN") {
+  if (executionResult && executionResult !== "SUCCESS" && executionResult !== "FINISHED_WITH_RETURN" && executionResult !== "MAJORITY_AGREE") {
     throw new ProtocolWriteError({
       kind: "timeout_unknown",
       code: executionResult || undefined,
