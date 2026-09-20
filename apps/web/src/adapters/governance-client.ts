@@ -58,7 +58,7 @@ export class GovernanceClient {
   // ── Views (implemented) ──
 
   async isAdmin(addressHex: string, stateStatus?: StateStatus): Promise<boolean> {
-    return Boolean(await this.read("is_admin", [addressHex], stateStatus));
+    return Boolean(await this.read("is_admin", [addressHex.toLowerCase()], stateStatus));
   }
 
   async getAdminCount(stateStatus?: StateStatus): Promise<number> {

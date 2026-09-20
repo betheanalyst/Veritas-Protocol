@@ -71,3 +71,18 @@ export function useDisputeHistory(taskId: string, enabled = true) {
     staleTime: 15_000,
   });
 }
+
+export function useOwnerModules(ownerAddress: string | null | undefined) {
+  return useQuery({
+    queryKey: ["registry", "owner-modules", ownerAddress ?? ""],
+    queryFn: async () => {
+      const ids = await registryClient.getOwnerModuleIds(ownerAddress as string, 0, 50);
+      const results = await Promise.allSettled(ids.map((id) => registryClient.getModule(id)));
+      return results
+        .filter((r): r is PromiseFulfilledResult<Module> => r.status === "fulfilled")
+        .map((r) => r.value);
+    },
+    enabled: Boolean(ownerAddress),
+    staleTime: 60_000,
+  });
+}

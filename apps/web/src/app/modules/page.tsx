@@ -12,7 +12,7 @@ import { LoadingBlock } from "@/components/states/LoadingBlock";
 import { ErrorState } from "@/components/states/ErrorState";
 import { EmptyState } from "@/components/states/EmptyState";
 import { describeError } from "@/adapters/errors";
-import { useKnownModules } from "@/queries/useProtocolReads";
+import { useKnownModules, useOwnerModules } from "@/queries/useProtocolReads";
 import { KNOWN_MODULE_LABELS } from "@/config/known-modules";
 import { useWallet } from "@/wallet/WalletProvider";
 import type { Module } from "@/domain/types";
@@ -42,11 +42,17 @@ function ModuleCard({ module }: { readonly module: Module }) {
 
 export default function ModulesPage() {
   const wallet = useWallet();
-  const query = useKnownModules();
+  const curatedQuery = useKnownModules();
+  const ownerQuery = useOwnerModules(wallet.address ?? null);
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
 
-  const modules = useMemo(() => query.data ?? [], [query.data]);
+  const modules = useMemo(() => {
+    const curated = curatedQuery.data ?? [];
+    const owned = ownerQuery.data ?? [];
+    const seen = new Set(curated.map((m) => m.moduleId));
+    return [...curated, ...owned.filter((m) => !seen.has(m.moduleId))];
+  }, [curatedQuery.data, ownerQuery.data]);
   const types = useMemo(() => [...new Set(modules.map((module) => module.moduleType))].sort(), [modules]);
 
   const filtered = useMemo(() => {
@@ -106,20 +112,20 @@ export default function ModulesPage() {
           </div>
         </div>
 
-        {query.isPending ? <LoadingBlock className="mt-10" label="Loading modules…" /> : null}
+        {curatedQuery.isPending ? <LoadingBlock className="mt-10" label="Loading modules…" /> : null}
 
-        {query.isError ? (
+        {curatedQuery.isError ? (
           <div className="mt-10">
             <ErrorState
               title="We could not load the modules"
-              message={describeError(query.error).whatHappened}
-              code={describeError(query.error).code}
-              onRetry={() => query.refetch()}
+              message={describeError(curatedQuery.error).whatHappened}
+              code={describeError(curatedQuery.error).code}
+              onRetry={() => curatedQuery.refetch()}
             />
           </div>
         ) : null}
 
-        {query.isSuccess ? (
+        {curatedQuery.isSuccess ? (
           filtered.length > 0 ? (
             <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {filtered.map((module) => (

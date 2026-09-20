@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { createWalletClient } from "@/adapters/genlayer-client";
 import { describeError } from "@/adapters/errors";
 import { coreClient } from "@/adapters/core-client";
@@ -82,8 +82,10 @@ function PhaseIndicator({ phase }: { readonly phase: SubmitPhase }) {
   );
 }
 
-export default function VerifyPage() {
+function VerifyWizard() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const preselectedModuleId = searchParams.get("module");
   const wallet = useWallet();
   const modulesQuery = useKnownModules();
 
@@ -105,6 +107,19 @@ export default function VerifyPage() {
   const [bondWei, setBondWei] = useState<bigint | null>(null);
   const [rateRemaining, setRateRemaining] = useState<number | null>(null);
   const [paused, setPaused] = useState<boolean | null>(null);
+
+  // Auto-select module from ?module= query param
+  useEffect(() => {
+    if (preselectedModuleId && modulesQuery.isSuccess && step === "select") {
+      const preselected = modulesQuery.data.find(
+        (mod) => mod.moduleId === preselectedModuleId,
+      );
+      if (preselected) {
+        setSelected(preselected);
+        setStep("brief");
+      }
+    }
+  }, [preselectedModuleId, modulesQuery.isSuccess, modulesQuery.data, step]);
 
   // Resume tracking a persisted tx (timeout != failure; never blind-retry).
   useEffect(() => {
@@ -548,5 +563,17 @@ export default function VerifyPage() {
         </Dialog>
       </Container>
     </>
+  );
+}
+
+export default function VerifyPage() {
+  return (
+    <Suspense fallback={
+      <Container className="py-20">
+        <LoadingBlock label="Loading…" />
+      </Container>
+    }>
+      <VerifyWizard />
+    </Suspense>
   );
 }
