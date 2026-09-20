@@ -9,6 +9,7 @@ import { coreClient } from "@/adapters/core-client";
 import { DEFAULT_STATE_STATUS } from "@/adapters/genlayer-client";
 import { describeError } from "@/adapters/errors";
 import { ClassificationBadge } from "@/components/verification/ClassificationBadge";
+import { CopyableId } from "@/components/primitives/CopyableId";
 import { Badge } from "@/components/primitives/Badge";
 import { Button, buttonStyles } from "@/components/primitives/Button";
 import { Select } from "@/components/primitives/Select";
@@ -133,7 +134,7 @@ export default function MyVerificationsPage() {
                 <li key={task.taskId} className="bg-bg-surface">
                   <Link href={`/verify/${encodeURIComponent(task.taskId)}`} className="block px-4 py-3 transition-colors hover:bg-bg-surface-2">
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                      <span className="break-all font-mono text-xs text-fg">{task.taskId}</span>
+                      <CopyableId value={task.taskId} className="break-all font-mono text-xs text-fg" />
                       <ClassificationBadge classification={task.classification} />
                       {task.status === "DISPUTED" ? <Badge tone="warning">UNDER DISPUTE</Badge> : null}
                       {task.status === "FINALIZED" ? <Badge tone="neutral">FINALIZED</Badge> : null}

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 
 import { Badge } from "@/components/primitives/Badge";
+import { CopyableId } from "@/components/primitives/CopyableId";
 import { DataField } from "@/components/primitives/DataField";
 import { Accordion } from "@/components/primitives/Accordion";
 import { LoadingBlock } from "@/components/states/LoadingBlock";
@@ -75,6 +76,7 @@ export default function ModuleDetailPage() {
       <h1 className="mt-4 text-3xl font-semibold tracking-tightest text-fg sm:text-4xl">
         {KNOWN_MODULE_LABELS[mod.moduleId as keyof typeof KNOWN_MODULE_LABELS] ?? mod.moduleId}
       </h1>
+      <CopyableId value={moduleId} className="mt-2 font-mono text-xs text-fg-muted" />
       <p className="mt-3 max-w-2xl text-base leading-7 text-fg-secondary">{mod.description}</p>
       <p className="mt-2 font-mono text-xs text-fg-muted">{mod.moduleId}</p>
 

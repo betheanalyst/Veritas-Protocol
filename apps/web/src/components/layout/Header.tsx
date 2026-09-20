@@ -13,6 +13,7 @@ const PUBLIC_NAV = [
   { href: "/modules", label: "Modules" },
   { href: "/activity", label: "Activity" },
   { href: "/protocol", label: "Protocol" },
+  { href: "/governance", label: "Governance" },
 ] as const;
 
 const MY_NAV = [

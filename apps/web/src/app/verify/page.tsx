@@ -17,7 +17,7 @@ import { Container } from "@/components/layout/Container";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { LoadingBlock } from "@/components/states/LoadingBlock";
 import { ErrorState } from "@/components/states/ErrorState";
-import { useKnownModules, useModule } from "@/queries/useProtocolReads";
+import { useKnownModules, useOwnerModules, useModule } from "@/queries/useProtocolReads";
 import { useWallet } from "@/wallet/WalletProvider";
 import {
   clearPendingTxHash,
@@ -87,7 +87,21 @@ function VerifyWizard() {
   const searchParams = useSearchParams();
   const preselectedModuleId = searchParams.get("module");
   const wallet = useWallet();
-  const modulesQuery = useKnownModules();
+  const curatedQuery = useKnownModules();
+  const ownerQuery = useOwnerModules(wallet.address ?? null);
+  const modulesQuery = {
+    data: useMemo(() => {
+      const curated = curatedQuery.data ?? [];
+      const owned = ownerQuery.data ?? [];
+      const seen = new Set(curated.map((m) => m.moduleId));
+      return [...curated, ...owned.filter((m) => !seen.has(m.moduleId))];
+    }, [curatedQuery.data, ownerQuery.data]),
+    isSuccess: curatedQuery.isSuccess,
+    isPending: curatedQuery.isPending,
+    isError: curatedQuery.isError,
+    error: curatedQuery.error,
+    refetch: curatedQuery.refetch,
+  };
 
   const [step, setStep] = useState<Step>("select");
   const [selected, setSelected] = useState<Module | null>(null);
