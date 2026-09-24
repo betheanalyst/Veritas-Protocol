@@ -6,11 +6,12 @@
 # Task submission, evaluation and consensus, dispute resolution,
 # reputation, economic bonding, the emergency pause, and submitter rate
 # limiting. Companion contracts: veritas_governance.py (parameters/admin)
-# and module_registry.py (module identity/policy). VeritasCore never calls
-# ModuleRegistry at runtime — every module field a task needs is
-# caller-supplied at submit() time and bound to ModuleRegistry's original,
-# validated values via hash verification (see ModuleSnapshot and
-# _compute_snapshot_hash below).
+# and module_registry.py (module identity/policy). VeritasCore makes
+# exactly one kind of call to ModuleRegistry: submit() reads
+# get_snapshot_hash(module_id) live, once per call, to authenticate the
+# caller-supplied module fields against ModuleRegistry's own on-chain
+# record (see submit()'s docstring). VeritasCore never writes to
+# ModuleRegistry, and no other method calls it at all.
 #
 # PAUSE SCOPE BOUNDARY, enforced deliberately narrowly: submit() (this
 # file) and register_module() (module_registry.py) are the ONLY two
@@ -33,9 +34,12 @@
 # both _compute_snapshot_hash implementations, and a field on
 # ModuleSnapshot — see module_registry.py's file header for the full
 # reasoning (submit()'s bonding logic needs the module owner's address to
-# pay the submission-bond owner-share correctly, and since VeritasCore
-# never calls ModuleRegistry, owner has to arrive as a caller-supplied,
-# hash-verified field like every other module field).
+# pay the submission-bond owner-share correctly). owner still arrives as a
+# caller-supplied, hash-verified field like every other module field —
+# submit() does not fetch the full module record from ModuleRegistry, only
+# its snapshot_hash — but that hash is now itself authenticated live
+# against ModuleRegistry's on-chain record, which is what makes trusting
+# the caller-supplied fields safe (see submit()'s docstring for why).
 #
 # Off-chain discoverability: every protocol event is emitted under its
 # canonical name with its required fields — ModuleRegistered/ModuleUpdated
@@ -282,8 +286,14 @@ class ModuleSnapshot:
 
     `owner` is captured here because submission-bond and dispute-bond
     forfeiture splits both pay a share to the module owner — see
-    module_registry.py's file header for why owner has to be captured at
-    submit() time rather than read live from the registry.
+    module_registry.py's file header for the full owner-hash rationale.
+    Ownership itself cannot change after registration (update_module()
+    has no `owner` parameter), so freezing it here isn't protecting
+    against drift in that specific field — it's the same uniform
+    treatment given to every other evaluation/bonding-affecting field:
+    frozen at submission, verified once against ModuleRegistry's record
+    at that moment, and never re-read afterward, so a task's economic
+    terms stay fixed regardless of what changes about the module later.
 
     Freezes every evaluation-affecting policy field, not the full
     VerificationModule record — `description`, `prompt_hash`, and
@@ -460,6 +470,7 @@ class VeritasCore(gl.Contract):
     # ── Governance wiring ───────────────────────────────────────────────────────
     deployer:                  Address
     governance_address:        Address
+    module_registry_address:   Address
     is_governance_configured:  bool
 
     def __init__(self) -> None:
@@ -483,11 +494,14 @@ class VeritasCore(gl.Contract):
         self.protocol_total_unchanged = u256(0)
 
     @gl.public.write
-    def configure(self, governance_address: str) -> None:
+    def configure(self, governance_address: str, module_registry_address: str) -> None:
         """
         One-time, deployer-only wiring of this contract to a deployed
-        VeritasGovernance instance. Performs the Cold-Start seeding via a
-        live cross-contract view read.
+        VeritasGovernance instance and a deployed ModuleRegistry instance.
+        Performs the Cold-Start seeding via a live cross-contract view
+        read to VeritasGovernance. module_registry_address is stored only
+        — nothing is read from ModuleRegistry here; it is read live by
+        submit() on every call, never cached.
 
         A deterministic view read, not a write, and it happens exactly
         once — this protocol has no cross-contract writes anywhere.
@@ -500,14 +514,20 @@ class VeritasCore(gl.Contract):
         defensive-parsing discipline elsewhere (e.g. _safe_int for
         untrusted LLM output).
 
-        governance_address is validated against the zero address before
-        use, matching the pattern established everywhere else an address
-        is configured in this protocol (VeritasGovernance.__init__'s
+        Both addresses are validated against the zero address before use,
+        matching the pattern established everywhere else an address is
+        configured in this protocol (VeritasGovernance.__init__'s
         treasury check, its SET_TREASURY action validation) — a call to
         the zero address would likely already fail at the platform level
         when the view call below is attempted, but this protocol rejects
         invalid configuration explicitly rather than relying on a
         downstream platform failure to catch it.
+
+        is_governance_configured gates both addresses together, not one
+        each: this contract has no operation that is meaningful with only
+        one of the two wired, so a single one-time flag (matching the
+        existing pattern exactly, rather than adding a second) is the
+        correct — and simpler — guard.
         """
         self._require(not self.is_governance_configured, "ERR:ALREADY_CONFIGURED")
         self._require(gl.message.sender_address == self.deployer, "ERR:NOT_DEPLOYER")
@@ -516,6 +536,11 @@ class VeritasCore(gl.Contract):
         self._require(
             gov_addr != Address("0x0000000000000000000000000000000000000000"),
             "ERR:GOVERNANCE_ADDRESS_CANNOT_BE_ZERO",
+        )
+        registry_addr = Address(module_registry_address)
+        self._require(
+            registry_addr != Address("0x0000000000000000000000000000000000000000"),
+            "ERR:MODULE_REGISTRY_ADDRESS_CANNOT_BE_ZERO",
         )
         seed = gl.get_contract_at(gov_addr).view().get_reputation_seed()
         seed_disputes  = int(seed["seed_disputes"])
@@ -528,10 +553,15 @@ class VeritasCore(gl.Contract):
         )
 
         self.governance_address       = gov_addr
+        self.module_registry_address  = registry_addr
         self.protocol_total_disputes  = u256(seed_disputes)
         self.protocol_total_unchanged = u256(seed_unchanged)
         self.is_governance_configured = True
-        gl.trace("CORE_CONFIGURED|governance:" + gov_addr.as_hex)
+        gl.trace(
+            "CORE_CONFIGURED"
+            + "|governance:" + gov_addr.as_hex
+            + "|module_registry:" + registry_addr.as_hex
+        )
 
     # ── Internal guards ────────────────────────────────────────────────────────
 
@@ -1298,14 +1328,32 @@ class VeritasCore(gl.Contract):
         `scoring_scale`, and `score_threshold_borderline` — is caller-
         supplied off-chain (from ModuleRegistry.get_module()) and bound
         into the hash-verification this method performs. None is
-        independently range-validated here: the hash-match check below is
-        the sole integrity mechanism, since a value that didn't match what
-        ModuleRegistry actually validated and hashed at registration/
-        update time cannot produce a matching snapshot_hash. `owner` in
-        particular must be hash-protected, not trusted blindly — an
-        unverified owner would let a malicious submitter redirect the
-        submission-bond owner-share to an address they control (see
-        _compute_snapshot_hash's and ModuleSnapshot's docstrings).
+        independently range-validated here — but the hash-verification is
+        a two-step check, not one, and both steps matter: first, that
+        `snapshot_hash` is what these caller-supplied fields actually hash
+        to (self-consistency — this alone proves nothing about whether the
+        fields are real); second, that this same `snapshot_hash` equals
+        ModuleRegistry.get_snapshot_hash(module_id), read live, once, on
+        every call. The second check is what makes the first one
+        meaningful: because a hash binds every field that went into it,
+        matching ModuleRegistry's own on-chain hash for this module_id
+        transitively authenticates every one of these fields at once — not
+        `owner` alone — against what ModuleRegistry actually has on
+        record. A caller cannot satisfy both checks with forged field
+        values without those values being byte-identical to what
+        ModuleRegistry stored. `owner` in particular must be authenticated
+        this way, not trusted blindly — an unverified owner would let a
+        malicious submitter redirect the submission-bond owner-share to an
+        address they control (see _compute_snapshot_hash's and
+        ModuleSnapshot's docstrings).
+
+        `module_type` is the one module field in this signature NOT
+        covered by the hash (see _compute_snapshot_hash's field list) — it
+        is never read by evaluation, dispute, or reputation logic anywhere
+        in this contract, so a forged value only mislabels a task's frozen
+        record cosmetically, with no effect on classification, bonding, or
+        settlement. This is a deliberate, existing boundary, not a gap
+        this method's authentication is intended to close.
 
         Payable. Caller must attach exactly the current submission bond
         amount (read live from VeritasGovernance — never cached). The bond
@@ -1427,6 +1475,26 @@ class VeritasCore(gl.Contract):
             scoring_scale,
         )
         self._require(local_hash == snapshot_hash, "ERR:SNAPSHOT_HASH_MISMATCH")
+
+        # Authenticate against ModuleRegistry's own on-chain record. The two
+        # checks above only prove self-consistency among the caller's own
+        # inputs — that snapshot_hash is what these fields hash to. They do
+        # NOT prove these fields are what was actually registered. This
+        # live view read is what does: get_snapshot_hash(module_id) returns
+        # ModuleRegistry's authoritative, on-chain snapshot_hash for this
+        # exact module_id (reverting ERR:MODULE_NOT_FOUND if it was never
+        # registered), and because a hash binds every field that went into
+        # it, requiring the caller's snapshot_hash to equal THIS value
+        # transitively authenticates owner, eval_prompt, criteria, every
+        # threshold, and every other hashed field in one check — not only
+        # owner. There is no scenario in which a caller can supply forged
+        # module data that both (a) matches their own claimed snapshot_hash
+        # (checked above) and (b) matches ModuleRegistry's real, independently
+        # computed snapshot_hash for that module_id, without those forged
+        # fields being byte-identical to what ModuleRegistry actually has on
+        # record.
+        registry_hash = gl.get_contract_at(self.module_registry_address).view().get_snapshot_hash(module_id)
+        self._require(snapshot_hash == registry_hash, "ERR:SNAPSHOT_HASH_NOT_REGISTERED")
 
         self._require("{output}"  in eval_prompt, "ERR:PROMPT_MISSING_OUTPUT_SLOT")
         self._require("{context}" in eval_prompt, "ERR:PROMPT_MISSING_CONTEXT_SLOT")

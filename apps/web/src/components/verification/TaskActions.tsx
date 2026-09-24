@@ -151,24 +151,20 @@ export function TaskActions({ task }: TaskActionsProps) {
 
       {evaluated ? (
         <div className="mt-4 space-y-3">
-          {isSubmitter && task.classification !== "VALID" ? (
+          {isSubmitter && task.classification !== "UNCERTAIN" ? (
             <div>
               <p className="text-sm leading-6 text-fg-secondary">
                 As the submitter you can dispute this {task.classification} result: a dispute bond is
                 escrowed and re-evaluation is triggered. If the dispute genuinely changes the outcome,
                 the bond is refunded in full; otherwise it is forfeited to the module owner and treasury.
+                {task.classification === "VALID"
+                  ? ` This VALID result is ${windowOpen ? "within" : "past"} its challenge window — third parties may also challenge it while the window remains open.`
+                  : ""}
               </p>
               <Button variant="secondary" size="sm" className="mt-2" onClick={() => openConfirm("dispute")} disabled={!wallet.isConnected || roundsLeft === 0}>
                 Dispute this result
               </Button>
             </div>
-          ) : null}
-          {isSubmitter && task.classification === "VALID" ? (
-            <p className="text-sm leading-6 text-fg-secondary">
-              This VALID result is {windowOpen ? "within" : "past"} its challenge window
-              {windowOpen ? " — it can be finalized once the window elapses" : " — you can finalize it now"}. Third
-              parties may challenge it while the window is open.
-            </p>
           ) : null}
           {!isSubmitter && task.classification === "VALID" ? (
             <div>

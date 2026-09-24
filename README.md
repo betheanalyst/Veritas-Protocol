@@ -47,7 +47,8 @@ A task on Veritas is a record that grows:
   `HALLUCINATION_DETECTION`, `EQUIVALENCE_CHECK`, `CUSTOM`), an evaluation method
   (`LLM_CONSENSUS` or `LLM_NON_COMPARATIVE`), and scoring thresholds. Every
   evaluation-affecting field is bound into a canonical **snapshot hash**, so a task can
-  later prove exactly which policy it was evaluated against without a cross-contract call.
+  later prove exactly which policy it was evaluated against, authenticated at submission
+  time against the module's own on-chain record.
 - **Submission** — a reference to the content being verified (inline text or a URL),
   submitted against a specific module with a bonded fee, split between the module owner
   and the protocol treasury the moment it's collected.
@@ -86,9 +87,12 @@ independently by multiple validator nodes, and GenLayer's non-deterministic exec
 - **Deterministic where it must be.** Task IDs, timestamps, and classification comparisons
   are computed without randomness or wall-clock calls — GenVM's transaction timestamp is
   the only source of "now," and every deterministic contract path stays deterministic.
-- **No cross-contract writes, anywhere.** The only interaction between Veritas's three
-  contracts is deterministic view reads (governance parameters) or caller-supplied,
-  hash-verified data (module policy) — never a live write from one contract into another.
+- **No cross-contract writes, anywhere.** The only cross-contract interaction anywhere in
+  the protocol is deterministic view reads — governance parameters, read live on every
+  call that needs them, and, since a module-authentication fix in `VeritasCore`, one
+  read to `ModuleRegistry` per `submit()` call, confirming the caller-supplied module
+  data actually matches what's on record. Never a live write from one contract into
+  another.
 
 ## How a Task Moves Through Veritas
 
@@ -97,8 +101,9 @@ register_module()        → module registered, snapshot hash issued (ModuleRegi
 submit()                  → task PENDING, submission bond forfeited (VeritasCore)
 evaluate()                 → leader/validator consensus → EVALUATED, result stored
 finalize()                 → after the challenge window (VALID results only) → FINALIZED
-  ├─ dispute_by_submitter() → submitter disputes → re-evaluation → DISPUTED → settled
-  └─ challenge()             → third party challenges VALID → re-evaluation → settled
+  ├─ dispute_by_submitter() → submitter disputes a non-UNCERTAIN result
+  └─ challenge()             → third party challenges a VALID result
+       both →  DISPUTED → re-evaluated → back to EVALUATED, bond settled
 ```
 
 Settlement and reputation are computed identically regardless of which path triggered the
@@ -109,13 +114,14 @@ everywhere it's needed, never re-implemented per call site.
 
 | Contract | Responsibility | Relationship |
 |---|---|---|
-| `veritas_core.py` | Task submission, evaluation/consensus, disputes, reputation, bonding, pause, rate limiting | Reads governance parameters live; verifies module data against `ModuleRegistry`'s hash rather than calling it. Never writes to either sibling contract. |
+| `veritas_core.py` | Task submission, evaluation/consensus, disputes, reputation, bonding, pause, rate limiting | Reads governance parameters live. Authenticates every module field a task needs by reading `ModuleRegistry`'s snapshot hash live, once per `submit()` call, and requiring the caller-supplied fields to hash to that exact value. Never writes to either sibling contract. |
 | `veritas_governance.py` | Admin multisig, propose→approve→timelock→execute parameter pipeline, emergency pause | **Structurally incapable** of touching a task, a module, a dispute, or a bond — it owns parameters and admin state only, and never calls the other two contracts. |
-| `module_registry.py` | Module registration, updates, and the canonical snapshot-hash integrity check | Reads governance parameters live for bond amounts and score-tolerance bounds; never called by `VeritasCore` at runtime — every field it validated arrives at `submit()` as caller-supplied data, verified against its hash. |
+| `module_registry.py` | Module registration, updates, and the canonical snapshot-hash integrity check | Reads governance parameters live for bond amounts and score-tolerance bounds. Called by `VeritasCore` for exactly one purpose — a read-only snapshot-hash lookup during `submit()` — and never called for anything else; never writes to either sibling contract. |
 
-Each contract is wired to `VeritasGovernance` through its own `configure(governance_address)`
-— deployer-only, and callable **exactly once** per contract. Once set, the pointer can
-never be changed by anyone, including the deployer: a trust anchor that could be silently
+Each contract is wired to `VeritasGovernance` through its own `configure()` call —
+deployer-only, and callable **exactly once** per contract. `VeritasCore`'s `configure()`
+additionally wires it to `ModuleRegistry` in the same one-time call. Once set, no pointer
+can be changed by anyone, including the deployer: a trust anchor that could be silently
 repointed would be a standing backdoor around every other protection in the protocol.
 
 ## Governance
@@ -168,7 +174,7 @@ by a single key:
 
 | Contract | Address |
 |---|---|
-| `veritas_core.py` | `0x6eDB217AB5cc661578D61622284e8914D77996Ee` |
+| `veritas_core.py` | `0x0D38aDC5e11A395B0785A8F0AF9ee012252b7763` |
 | `veritas_governance.py` | `0x1A3E7a5B67e961dD2dB6D64C5732635fc5e0Cd9D` |
 | `module_registry.py` | `0xBb087A4FA41d5a40a4f40450a0A565d3748f0080` |
 
